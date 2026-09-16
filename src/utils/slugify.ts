@@ -1,6 +1,6 @@
 // Turns "Rwanda Wildlife Safari" into "rwanda-wildlife-safari" so we get
 // clean, SEO-friendly URLs like /tours/rwanda-wildlife-safari (SRS §52).
-function slugify(text) {
+function slugify(text: string): string {
   return text
     .toString()
     .toLowerCase()
@@ -10,4 +10,4 @@ function slugify(text) {
     .replace(/^-+|-+$/g, ''); // trim leading/trailing hyphens
 }
 
-module.exports = slugify;
+export default slugify;

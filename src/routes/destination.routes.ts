@@ -1,19 +1,20 @@
-const express = require('express');
-const router = express.Router();
+import { Router } from 'express';
 
-const {
+import {
   getDestinations,
   getDestinationBySlug,
   createDestination,
   updateDestination,
   deleteDestination,
-} = require('../controllers/destination.controller');
-const validate = require('../middleware/validate');
-const {
+} from '../controllers/destination.controller';
+import validate from '../middleware/validate';
+import {
   idParamRule,
   createDestinationRules,
   updateDestinationRules,
-} = require('../validators/destination.validator');
+} from '../validators/destination.validator';
+
+const router = Router();
 
 // Public reads
 router.get('/', getDestinations);
@@ -25,4 +26,4 @@ router.post('/', createDestinationRules, validate, createDestination);
 router.put('/:id', updateDestinationRules, validate, updateDestination);
 router.delete('/:id', idParamRule, validate, deleteDestination);
 
-module.exports = router;
+export default router;
