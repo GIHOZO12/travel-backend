@@ -1,11 +1,12 @@
-const prisma = require('../config/prisma');
-const asyncHandler = require('../utils/asyncHandler');
-const ApiError = require('../utils/ApiError');
-const slugify = require('../utils/slugify');
+import { Request, Response } from 'express';
+import prisma from '../config/prisma';
+import asyncHandler from '../utils/asyncHandler';
+import ApiError from '../utils/ApiError';
+import slugify from '../utils/slugify';
 
 // GET /api/destinations
 // Public listing — only published destinations, newest first.
-const getDestinations = asyncHandler(async (req, res) => {
+const getDestinations = asyncHandler(async (req: Request, res: Response) => {
   const destinations = await prisma.destination.findMany({
     where: { isPublished: true },
     orderBy: { createdAt: 'desc' },
@@ -16,9 +17,15 @@ const getDestinations = asyncHandler(async (req, res) => {
 
 // GET /api/destinations/:slug
 // Public detail page — includes its published tours (SRS §21-22).
-const getDestinationBySlug = asyncHandler(async (req, res) => {
+const getDestinationBySlug = asyncHandler(async (req: Request, res: Response) => {
+  // Express 5 types route params as `string | string[]` (to account for
+  // wildcard routes that can capture multiple segments). Our `/:slug`
+  // route never does that, but we satisfy the type honestly rather than
+  // asserting it away.
+  const slug = Array.isArray(req.params.slug) ? req.params.slug[0] : req.params.slug;
+
   const destination = await prisma.destination.findUnique({
-    where: { slug: req.params.slug },
+    where: { slug },
     include: {
       tours: {
         where: { isPublished: true },
@@ -44,7 +51,7 @@ const getDestinationBySlug = asyncHandler(async (req, res) => {
 
 // POST /api/destinations
 // Admin-only in Phase 4 — left open for now so we can test it directly.
-const createDestination = asyncHandler(async (req, res) => {
+const createDestination = asyncHandler(async (req: Request, res: Response) => {
   const {
     name,
     country,
@@ -85,7 +92,7 @@ const createDestination = asyncHandler(async (req, res) => {
 });
 
 // PUT /api/destinations/:id
-const updateDestination = asyncHandler(async (req, res) => {
+const updateDestination = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
 
   const existing = await prisma.destination.findUnique({ where: { id } });
@@ -105,7 +112,7 @@ const updateDestination = asyncHandler(async (req, res) => {
 });
 
 // DELETE /api/destinations/:id
-const deleteDestination = asyncHandler(async (req, res) => {
+const deleteDestination = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
 
   const existing = await prisma.destination.findUnique({ where: { id } });
@@ -117,7 +124,7 @@ const deleteDestination = asyncHandler(async (req, res) => {
   res.json({ success: true, message: 'Destination deleted' });
 });
 
-module.exports = {
+export {
   getDestinations,
   getDestinationBySlug,
   createDestination,

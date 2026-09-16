@@ -1,4 +1,4 @@
-const { body, param } = require('express-validator');
+import { body, param } from 'express-validator';
 
 const idParamRule = param('id').isInt().withMessage('Invalid destination id').toInt();
 
@@ -32,4 +32,4 @@ const updateDestinationRules = [
   body('isPublished').optional().isBoolean(),
 ];
 
-module.exports = { idParamRule, createDestinationRules, updateDestinationRules };
+export { idParamRule, createDestinationRules, updateDestinationRules };

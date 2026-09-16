@@ -1,11 +1,13 @@
 # Travel & Tour Company Website — Backend
 
-Express + PostgreSQL (via Prisma) API for the travel/tour website described
-in the project SRS.
+Express + TypeScript + PostgreSQL (via Prisma) API for the travel/tour
+website described in the project SRS.
 
 ## Stack
 
 - **Node.js / Express** — HTTP server and routing
+- **TypeScript** — compiled to `dist/` for production, run directly via
+  `tsx` in dev (no separate build step needed while developing)
 - **PostgreSQL** — relational database
 - **Prisma** — ORM: schema, migrations, type-safe query client
 - **JWT + bcryptjs** — admin authentication (added in Phase 4)
@@ -17,26 +19,29 @@ in the project SRS.
 ```
 prisma/
   schema.prisma        # database schema — source of truth for all tables
+tsconfig.json           # TypeScript compiler config
 src/
-  app.js                # Express app: middleware + route mounting
-  server.js              # entry point — starts the HTTP server
+  app.ts                # Express app: middleware + route mounting
+  server.ts              # entry point — starts the HTTP server
   config/
-    prisma.js            # shared PrismaClient instance
+    prisma.ts            # shared PrismaClient instance
   routes/
-    index.js             # mounts every feature's routes under /api
-    destination.routes.js
+    index.ts             # mounts every feature's routes under /api
+    destination.routes.ts
   controllers/
-    destination.controller.js
+    destination.controller.ts
+    tour.controller.ts
   validators/
-    destination.validator.js
+    destination.validator.ts
+    tour.validator.ts
   middleware/
-    errorHandler.js       # central error formatting (incl. Prisma errors)
-    notFound.js            # 404 fallback
-    validate.js             # runs express-validator rule results
+    errorHandler.ts       # central error formatting (incl. Prisma errors)
+    notFound.ts            # 404 fallback
+    validate.ts             # runs express-validator rule results
   utils/
-    ApiError.js              # throw new ApiError(statusCode, message)
-    asyncHandler.js            # wraps async route handlers
-    slugify.js                  # "Rwanda Safari" -> "rwanda-safari"
+    ApiError.ts              # throw new ApiError(statusCode, message)
+    asyncHandler.ts            # wraps async route handlers
+    slugify.ts                  # "Rwanda Safari" -> "rwanda-safari"
 ```
 
 Every other entity (Tour, Inquiry, BookingRequest, FAQ, Testimonial,
@@ -84,7 +89,10 @@ BlogPost) follows the same four-file pattern as Destination:
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Start the server with nodemon (auto-restart on file changes) |
+| `npm run dev` | Start the server with `tsx watch` (runs TS directly, auto-restarts on file changes) |
+| `npm run typecheck` | Run the TypeScript compiler in check-only mode — no output files, just errors. Run this often. |
+| `npm run build` | Compile `src/**/*.ts` to `dist/**/*.js` for production |
+| `npm start` | Run the compiled production build (`node dist/server.js`) — requires `npm run build` first |
 | `npx prisma migrate dev --name <change>` | Create + apply a new migration after editing schema.prisma |
 | `npx prisma studio` | Opens a GUI in the browser to browse/edit your database rows |
 | `npx prisma generate` | Regenerate the Prisma Client (usually automatic after migrate) |
