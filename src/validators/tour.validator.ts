@@ -13,15 +13,16 @@ const destinationExistsRule = (chain: ValidationChain): ValidationChain =>
       const destination = await prisma.destination.findUnique({ where: { id: Number(value) } });
       if (!destination) throw new Error('No destination exists with that id');
       return true;
-    });
+    })
+    .toInt();
 
 // Rules for POST /api/tours — everything required is required.
 const createTourRules = [
   body('name').trim().notEmpty().withMessage('Tour name is required'),
   body('overview').trim().notEmpty().withMessage('Overview is required'),
   body('category').trim().notEmpty().withMessage('Category is required'),
-  body('durationDays').notEmpty().withMessage('Duration in days is required').isInt({ min: 1 }).withMessage('Duration in days must be a positive integer'),
-  body('durationNights').notEmpty().withMessage('Duration in nights is required').isInt({ min: 1 }).withMessage('Duration in nights must be a positive integer'),
+  body('durationDays').notEmpty().withMessage('Duration in days is required').isInt({ min: 1 }).withMessage('Duration in days must be a positive integer').toInt(),
+  body('durationNights').notEmpty().withMessage('Duration in nights is required').isInt({ min: 1 }).withMessage('Duration in nights must be a positive integer').toInt(),
   destinationExistsRule(body('destinationId').notEmpty().withMessage('destinationId is required')),
   body('startingPrice').optional().isDecimal(),
   body('currency').optional().trim().isLength({ min: 3, max: 3 }).withMessage('Currency must be a 3-letter code'),
@@ -42,8 +43,8 @@ const updateTourRules = [
   body('name').optional().trim().notEmpty().withMessage('Tour name cannot be empty'),
   body('overview').optional().trim().notEmpty().withMessage('Overview cannot be empty'),
   body('category').optional().trim().notEmpty().withMessage('Category cannot be empty'),
-  body('durationDays').optional().isInt({ min: 1 }).withMessage('Duration in days must be a positive integer'),
-  body('durationNights').optional().isInt({ min: 1 }).withMessage('Duration in nights must be a positive integer'),
+  body('durationDays').optional().isInt({ min: 1 }).withMessage('Duration in days must be a positive integer').toInt(),
+  body('durationNights').optional().isInt({ min: 1 }).withMessage('Duration in nights must be a positive integer').toInt(),
   destinationExistsRule(body('destinationId').optional()),
   body('startingPrice').optional().isDecimal(),
   body('currency').optional().trim().isLength({ min: 3, max: 3 }).withMessage('Currency must be a 3-letter code'),

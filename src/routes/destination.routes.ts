@@ -7,6 +7,7 @@ import {
   updateDestination,
   deleteDestination,
 } from '../controllers/destination.controller';
+import protect from '../middleware/protect';
 import validate from '../middleware/validate';
 import {
   idParamRule,
@@ -20,10 +21,10 @@ const router = Router();
 router.get('/', getDestinations);
 router.get('/:slug', getDestinationBySlug);
 
-// Writes — NOT auth-protected yet. In Phase 4 we'll add a `protect`
-// middleware here (JWT check) so only a logged-in admin can reach these.
-router.post('/', createDestinationRules, validate, createDestination);
-router.put('/:id', updateDestinationRules, validate, updateDestination);
-router.delete('/:id', idParamRule, validate, deleteDestination);
+// Writes — require a logged-in admin. `protect` runs first so an
+// unauthenticated request never even reaches validation.
+router.post('/', protect, createDestinationRules, validate, createDestination);
+router.put('/:id', protect, updateDestinationRules, validate, updateDestination);
+router.delete('/:id', protect, idParamRule, validate, deleteDestination);
 
 export default router;
