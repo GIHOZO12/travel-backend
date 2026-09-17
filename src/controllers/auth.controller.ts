@@ -11,9 +11,7 @@ const login = asyncHandler(async (req: Request, res: Response) => {
 
   const admin = await prisma.adminUser.findUnique({ where: { email } });
   if (!admin) {
-    // Deliberately the SAME message as a wrong password below — telling
-    // an attacker "that email doesn't exist" vs "wrong password" makes it
-    // easier to enumerate valid admin emails.
+    
     throw new ApiError(401, 'Invalid email or password');
   }
 
