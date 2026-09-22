@@ -9,6 +9,9 @@ dist/
 # Prisma
 prisma/*.db
 
+# User-uploaded images
+uploads/
+
 # Logs
 logs/
 *.log

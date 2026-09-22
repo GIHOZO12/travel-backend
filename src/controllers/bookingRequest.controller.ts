@@ -3,6 +3,7 @@ import { BookingStatus } from '@prisma/client';
 import prisma from '../config/prisma';
 import asyncHandler from '../utils/asyncHandler';
 import ApiError from '../utils/ApiError';
+import { notifyBookingStatusChange, notifyNewBooking } from '../services/notifications';
 
 // POST /api/booking-requests
 // PUBLIC — any website visitor can submit this. No auth required
@@ -32,7 +33,11 @@ const createBookingRequest = asyncHandler(async (req: Request, res: Response) =>
       specialRequests,
       tour: { connect: { id: tourId } },
     },
+    include: { tour: { select: { id: true, name: true, slug: true } } },
   });
+
+  // Fire-and-forget: the response doesn't wait for (or fail because of) email.
+  void notifyNewBooking(bookingRequest);
 
   res.status(201).json({
     success: true,
@@ -103,6 +108,11 @@ const updateBookingRequest = asyncHandler(async (req: Request, res: Response) =>
       tour: { select: { id: true, name: true, slug: true } },
     },
   });
+
+  // Email the customer when staff move the booking to a new status.
+  if (bookingRequest.status !== existing.status) {
+    void notifyBookingStatusChange(bookingRequest);
+  }
 
   res.json({ success: true, data: bookingRequest });
 });
