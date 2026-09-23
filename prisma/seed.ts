@@ -28,7 +28,7 @@ async function main(): Promise<void> {
   const hashedPassword = await bcrypt.hash(password, 10);
 
   const admin = await prisma.adminUser.create({
-    data: { name, email, password: hashedPassword },
+    data: { name, email, password: hashedPassword, role: 'ADMIN' },
   });
 
   console.log(`Seeded admin account: ${admin.email}`);

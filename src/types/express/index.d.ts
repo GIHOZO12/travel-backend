@@ -1,3 +1,5 @@
+import type { AdminRole } from '@prisma/client';
+
 // Module augmentation: adds `user` to Express's Request type, set by the
 // `protect` middleware once a JWT has been verified. Without this, every
 // controller reading `req.user` would fail to typecheck.
@@ -8,7 +10,7 @@ declare global {
         id: number;
         name: string;
         email: string;
-        role: string;
+        role: AdminRole;
       };
     }
   }

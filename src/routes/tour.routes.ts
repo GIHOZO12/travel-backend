@@ -8,6 +8,7 @@ import {
   deleteTour,
 } from '../controllers/tour.controller';
 import protect from '../middleware/protect';
+import requireAdmin from '../middleware/requireAdmin';
 import validate from '../middleware/validate';
 import {
   idParamRule,
@@ -111,7 +112,7 @@ router.get('/:slug', getTourBySlug);
  *       409:
  *         description: A tour with that name/slug already exists.
  */
-router.post('/', protect, createTourRules, validate, createTour);
+router.post('/', protect, requireAdmin, createTourRules, validate, createTour);
 
 /**
  * @openapi
@@ -142,7 +143,7 @@ router.post('/', protect, createTourRules, validate, createTour);
  *       404:
  *         description: No tour with that id.
  */
-router.put('/:id', protect, updateTourRules, validate, updateTour);
+router.put('/:id', protect, requireAdmin, updateTourRules, validate, updateTour);
 
 /**
  * @openapi
@@ -168,6 +169,6 @@ router.put('/:id', protect, updateTourRules, validate, updateTour);
  *       409:
  *         description: 'This tour still has booking requests referencing it and cannot be deleted.'
  */
-router.delete('/:id', protect, idParamRule, validate, deleteTour);
+router.delete('/:id', protect, requireAdmin, idParamRule, validate, deleteTour);
 
 export default router;

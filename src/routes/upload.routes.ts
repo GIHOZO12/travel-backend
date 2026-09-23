@@ -4,6 +4,7 @@ import multer from 'multer';
 
 import { UPLOAD_DIR } from '../config/uploads';
 import protect from '../middleware/protect';
+import requireAdmin from '../middleware/requireAdmin';
 import ApiError from '../utils/ApiError';
 
 const router = Router();
@@ -74,9 +75,9 @@ function receiveImage(req: Request, res: Response, next: NextFunction): void {
  *       401:
  *         description: Missing, invalid or expired token.
  */
-// `protect` runs BEFORE multer so anonymous requests are rejected before any
-// file is read from the network.
-router.post('/', protect, receiveImage, (req: Request, res: Response, next: NextFunction) => {
+// `protect`/`requireAdmin` run BEFORE multer so an anonymous or STAFF request
+// is rejected before any file is read from the network.
+router.post('/', protect, requireAdmin, receiveImage, (req: Request, res: Response, next: NextFunction) => {
   if (!req.file) {
     return next(new ApiError(400, 'No image file received (use the "file" field)'));
   }

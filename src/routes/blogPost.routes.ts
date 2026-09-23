@@ -8,6 +8,7 @@ import {
   deleteBlogPost,
 } from '../controllers/blogPost.controller';
 import protect from '../middleware/protect';
+import requireAdmin from '../middleware/requireAdmin';
 import validate from '../middleware/validate';
 import {
   idParamRule,
@@ -80,7 +81,7 @@ router.get('/:slug', getBlogPostBySlug);
  *       409:
  *         description: A post with that title/slug already exists.
  */
-router.post('/', protect, createBlogPostRules, validate, createBlogPost);
+router.post('/', protect, requireAdmin, createBlogPostRules, validate, createBlogPost);
 
 /**
  * @openapi
@@ -104,7 +105,7 @@ router.post('/', protect, createBlogPostRules, validate, createBlogPost);
  *       404:
  *         description: No post with that id.
  */
-router.put('/:id', protect, updateBlogPostRules, validate, updateBlogPost);
+router.put('/:id', protect, requireAdmin, updateBlogPostRules, validate, updateBlogPost);
 
 /**
  * @openapi
@@ -128,6 +129,6 @@ router.put('/:id', protect, updateBlogPostRules, validate, updateBlogPost);
  *       404:
  *         description: No post with that id.
  */
-router.delete('/:id', protect, idParamRule, validate, deleteBlogPost);
+router.delete('/:id', protect, requireAdmin, idParamRule, validate, deleteBlogPost);
 
 export default router;
