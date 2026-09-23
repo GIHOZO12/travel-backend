@@ -8,6 +8,7 @@ import {
   deleteTestimonial,
 } from '../controllers/testimonial.controller';
 import protect from '../middleware/protect';
+import requireAdmin from '../middleware/requireAdmin';
 import validate from '../middleware/validate';
 import {
   idParamRule,
@@ -44,7 +45,7 @@ router.get('/', getTestimonials);
  *       401:
  *         description: Missing, invalid or expired token.
  */
-router.get('/all', protect, getAllTestimonials);
+router.get('/all', protect, requireAdmin, getAllTestimonials);
 
 /**
  * @openapi
@@ -75,7 +76,7 @@ router.get('/all', protect, getAllTestimonials);
  *       401:
  *         description: Missing, invalid or expired token.
  */
-router.post('/', protect, createTestimonialRules, validate, createTestimonial);
+router.post('/', protect, requireAdmin, createTestimonialRules, validate, createTestimonial);
 
 /**
  * @openapi
@@ -99,7 +100,7 @@ router.post('/', protect, createTestimonialRules, validate, createTestimonial);
  *       404:
  *         description: No testimonial with that id.
  */
-router.put('/:id', protect, updateTestimonialRules, validate, updateTestimonial);
+router.put('/:id', protect, requireAdmin, updateTestimonialRules, validate, updateTestimonial);
 
 /**
  * @openapi
@@ -123,6 +124,6 @@ router.put('/:id', protect, updateTestimonialRules, validate, updateTestimonial)
  *       404:
  *         description: No testimonial with that id.
  */
-router.delete('/:id', protect, idParamRule, validate, deleteTestimonial);
+router.delete('/:id', protect, requireAdmin, idParamRule, validate, deleteTestimonial);
 
 export default router;

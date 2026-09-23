@@ -13,14 +13,27 @@ datasource db {
 
 // ---------- Admin / Auth ----------
 
+// ADMIN: full access — content (destinations/tours/FAQs/testimonials/blog),
+// image uploads, and managing other admin/staff accounts.
+// STAFF: bookings and inquiries only (view, update status) — SRS §5.4
+// "Tour Operator / Staff User". Cannot touch content or other accounts.
+//
+// @map values keep the raw database text lowercase ("admin"/"staff"), which
+// is what every existing row already contains from the old plain-String
+// column — see the migration that introduces this enum.
+enum AdminRole {
+  ADMIN @map("admin")
+  STAFF @map("staff")
+}
+
 model AdminUser {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   name      String
-  email     String   @unique
+  email     String    @unique
   password  String // stored as a bcrypt hash, never plain text
-  role      String   @default("admin")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  role      AdminRole @default(ADMIN)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@map("admin_users")
 }

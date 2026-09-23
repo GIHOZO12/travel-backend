@@ -8,6 +8,7 @@ import {
   deleteDestination,
 } from '../controllers/destination.controller';
 import protect from '../middleware/protect';
+import requireAdmin from '../middleware/requireAdmin';
 import validate from '../middleware/validate';
 import {
   idParamRule,
@@ -96,7 +97,7 @@ router.get('/:slug', getDestinationBySlug);
  *             schema:
  *               $ref: '#/components/schemas/ApiErrorResponse'
  */
-router.post('/', protect, createDestinationRules, validate, createDestination);
+router.post('/', protect, requireAdmin, createDestinationRules, validate, createDestination);
 
 /**
  * @openapi
@@ -126,7 +127,7 @@ router.post('/', protect, createDestinationRules, validate, createDestination);
  *       404:
  *         description: No destination with that id.
  */
-router.put('/:id', protect, updateDestinationRules, validate, updateDestination);
+router.put('/:id', protect, requireAdmin, updateDestinationRules, validate, updateDestination);
 
 /**
  * @openapi
@@ -152,6 +153,6 @@ router.put('/:id', protect, updateDestinationRules, validate, updateDestination)
  *       409:
  *         description: 'This destination still has tours referencing it and cannot be deleted.'
  */
-router.delete('/:id', protect, idParamRule, validate, deleteDestination);
+router.delete('/:id', protect, requireAdmin, idParamRule, validate, deleteDestination);
 
 export default router;

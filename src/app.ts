@@ -8,10 +8,27 @@ import swaggerUi from 'swagger-ui-express';
 
 import routes from './routes';
 import swaggerSpec from './config/swagger';
+import { UPLOAD_DIR } from './config/uploads';
 import notFound from './middleware/notFound';
 import errorHandler from './middleware/errorHandler';
 
 const app = express();
+
+// --- Uploaded images ---
+// Mounted BEFORE helmet on purpose: helmet's default Cross-Origin-Resource-Policy
+// is "same-origin", which would stop the website (a different origin,
+// localhost:3000) from displaying these images. Everything here is
+// public images only; "nosniff" stops browsers treating a file as anything but
+// what its extension says.
+app.use(
+  '/uploads',
+  (_req, res, next) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    next();
+  },
+  express.static(UPLOAD_DIR, { maxAge: '7d', immutable: true }),
+);
 
 // --- Security & parsing middleware (runs on every request, in order) ---
 //

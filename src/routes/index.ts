@@ -8,6 +8,7 @@ import bookingRequestRoutes from './bookingRequest.routes';
 import faqRoutes from './faq.routes';
 import testimonialRoutes from './testimonial.routes';
 import blogPostRoutes from './blogPost.routes';
+import uploadRoutes from './upload.routes';
 
 const router = Router();
 
@@ -23,5 +24,6 @@ router.use('/booking-requests', bookingRequestRoutes);
 router.use('/faqs', faqRoutes);
 router.use('/testimonials', testimonialRoutes);
 router.use('/blog', blogPostRoutes);
+router.use('/uploads', uploadRoutes);
 
 export default router;

@@ -3,6 +3,7 @@ import { InquiryStatus } from '@prisma/client';
 import prisma from '../config/prisma';
 import asyncHandler from '../utils/asyncHandler';
 import ApiError from '../utils/ApiError';
+import { notifyNewInquiry } from '../services/notifications';
 
 // POST /api/inquiries
 // PUBLIC — any website visitor can submit this. No auth required. This is
@@ -32,7 +33,11 @@ const createInquiry = asyncHandler(async (req: Request, res: Response) => {
       // one was actually provided.
       ...(tourId ? { tour: { connect: { id: tourId } } } : {}),
     },
+    include: { tour: { select: { id: true, name: true, slug: true } } },
   });
+
+  // Fire-and-forget: the response doesn't wait for (or fail because of) email.
+  void notifyNewInquiry(inquiry);
 
   res.status(201).json({
     success: true,

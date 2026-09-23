@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { getFAQs, createFAQ, updateFAQ, deleteFAQ } from '../controllers/faq.controller';
 import protect from '../middleware/protect';
+import requireAdmin from '../middleware/requireAdmin';
 import validate from '../middleware/validate';
 import { idParamRule, createFAQRules, updateFAQRules } from '../validators/faq.validator';
 
@@ -45,7 +46,7 @@ router.get('/', getFAQs);
  *       401:
  *         description: Missing, invalid or expired token.
  */
-router.post('/', protect, createFAQRules, validate, createFAQ);
+router.post('/', protect, requireAdmin, createFAQRules, validate, createFAQ);
 
 /**
  * @openapi
@@ -69,7 +70,7 @@ router.post('/', protect, createFAQRules, validate, createFAQ);
  *       404:
  *         description: No FAQ with that id.
  */
-router.put('/:id', protect, updateFAQRules, validate, updateFAQ);
+router.put('/:id', protect, requireAdmin, updateFAQRules, validate, updateFAQ);
 
 /**
  * @openapi
@@ -93,6 +94,6 @@ router.put('/:id', protect, updateFAQRules, validate, updateFAQ);
  *       404:
  *         description: No FAQ with that id.
  */
-router.delete('/:id', protect, idParamRule, validate, deleteFAQ);
+router.delete('/:id', protect, requireAdmin, idParamRule, validate, deleteFAQ);
 
 export default router;
