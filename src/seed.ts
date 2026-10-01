@@ -1,10 +1,9 @@
-import 'dotenv/config';
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { AppDataSource } from './config/data-source';
+import { AdminUser } from './entities/AdminUser';
+import { AdminRole } from './entities/enums';
 
-const prisma = new PrismaClient();
-
-// Creates the FIRST admin account from .env. Run with `npx prisma db seed`.
+// Creates the FIRST admin account from .env. Run with `npm run seed`.
 // There is deliberately no public /register endpoint — every admin after
 // this one is created through the protected POST /api/auth/admins route,
 // which requires an already-logged-in admin.
@@ -19,7 +18,10 @@ async function main(): Promise<void> {
     );
   }
 
-  const existing = await prisma.adminUser.findUnique({ where: { email } });
+  await AppDataSource.initialize();
+  const adminRepo = AppDataSource.getRepository(AdminUser);
+
+  const existing = await adminRepo.findOneBy({ email });
   if (existing) {
     console.log(`Admin "${email}" already exists — skipping.`);
     return;
@@ -27,9 +29,9 @@ async function main(): Promise<void> {
 
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  const admin = await prisma.adminUser.create({
-    data: { name, email, password: hashedPassword, role: 'ADMIN' },
-  });
+  const admin = await adminRepo.save(
+    adminRepo.create({ name, email, password: hashedPassword, role: AdminRole.ADMIN }),
+  );
 
   console.log(`Seeded admin account: ${admin.email}`);
 }
@@ -37,8 +39,10 @@ async function main(): Promise<void> {
 main()
   .catch((err) => {
     console.error(err);
-    process.exit(1);
+    process.exitCode = 1;
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    if (AppDataSource.isInitialized) {
+      await AppDataSource.destroy();
+    }
   });

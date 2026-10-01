@@ -1,14 +1,17 @@
 import { Request, Response } from 'express';
-import prisma from '../config/prisma';
+import { AppDataSource } from '../config/data-source';
+import { BlogPost } from '../entities/BlogPost';
 import asyncHandler from '../utils/asyncHandler';
 import ApiError from '../utils/ApiError';
 import slugify from '../utils/slugify';
 
+const blogPostRepo = AppDataSource.getRepository(BlogPost);
+
 // GET /api/blog — public, published only, newest first.
 const getBlogPosts = asyncHandler(async (req: Request, res: Response) => {
-  const posts = await prisma.blogPost.findMany({
+  const posts = await blogPostRepo.find({
     where: { isPublished: true },
-    orderBy: { createdAt: 'desc' },
+    order: { createdAt: 'DESC' },
   });
 
   res.json({ success: true, data: posts });
@@ -18,7 +21,7 @@ const getBlogPosts = asyncHandler(async (req: Request, res: Response) => {
 const getBlogPostBySlug = asyncHandler(async (req: Request, res: Response) => {
   const slug = Array.isArray(req.params.slug) ? req.params.slug[0] : req.params.slug;
 
-  const post = await prisma.blogPost.findUnique({ where: { slug } });
+  const post = await blogPostRepo.findOneBy({ slug });
 
   if (!post) {
     throw new ApiError(404, 'Blog post not found');
@@ -33,15 +36,15 @@ const createBlogPost = asyncHandler(async (req: Request, res: Response) => {
 
   const slug = slugify(title);
 
-  const existing = await prisma.blogPost.findUnique({ where: { slug } });
+  const existing = await blogPostRepo.findOneBy({ slug });
   if (existing) {
     throw new ApiError(409, `A blog post titled "${title}" already exists`);
   }
 
   const published = isPublished ?? true;
 
-  const post = await prisma.blogPost.create({
-    data: {
+  const post = await blogPostRepo.save(
+    blogPostRepo.create({
       title,
       slug,
       content,
@@ -54,8 +57,8 @@ const createBlogPost = asyncHandler(async (req: Request, res: Response) => {
       // isPublished — a post can be unpublished/republished later without
       // losing its original publish date.
       publishedAt: published ? new Date() : null,
-    },
-  });
+    }),
+  );
 
   res.status(201).json({ success: true, data: post });
 });
@@ -64,7 +67,7 @@ const createBlogPost = asyncHandler(async (req: Request, res: Response) => {
 const updateBlogPost = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
 
-  const existing = await prisma.blogPost.findUnique({ where: { id } });
+  const existing = await blogPostRepo.findOneBy({ id });
   if (!existing) {
     throw new ApiError(404, 'Blog post not found');
   }
@@ -82,7 +85,7 @@ const updateBlogPost = asyncHandler(async (req: Request, res: Response) => {
     data.publishedAt = new Date();
   }
 
-  const post = await prisma.blogPost.update({ where: { id }, data });
+  const post = await blogPostRepo.save(blogPostRepo.merge(existing, data));
   res.json({ success: true, data: post });
 });
 
@@ -90,12 +93,12 @@ const updateBlogPost = asyncHandler(async (req: Request, res: Response) => {
 const deleteBlogPost = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
 
-  const existing = await prisma.blogPost.findUnique({ where: { id } });
+  const existing = await blogPostRepo.findOneBy({ id });
   if (!existing) {
     throw new ApiError(404, 'Blog post not found');
   }
 
-  await prisma.blogPost.delete({ where: { id } });
+  await blogPostRepo.delete(id);
   res.json({ success: true, message: 'Blog post deleted' });
 });
 

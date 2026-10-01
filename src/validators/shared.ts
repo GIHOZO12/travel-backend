@@ -1,14 +1,16 @@
 import { ValidationChain } from 'express-validator';
-import prisma from '../config/prisma';
+import { AppDataSource } from '../config/data-source';
+import { Tour } from '../entities/Tour';
 
+const tourRepo = AppDataSource.getRepository(Tour);
 
 export const tourExistsRule = (chain: ValidationChain): ValidationChain =>
   chain
     .isInt().withMessage('tourId must be an integer')
     .bail()
     .custom(async (value: string) => {
-      const tour = await prisma.tour.findUnique({ where: { id: Number(value) } });
-      if (!tour) throw new Error('No tour exists with that id');
+      const exists = await tourRepo.existsBy({ id: Number(value) });
+      if (!exists) throw new Error('No tour exists with that id');
       return true;
     })
     .toInt();

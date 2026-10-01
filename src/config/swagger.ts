@@ -1,3 +1,4 @@
+import path from 'path';
 import swaggerJsdoc from 'swagger-jsdoc';
 
 // This spec is built by SCANNING your route files for `@openapi` YAML
@@ -54,12 +55,11 @@ const options: swaggerJsdoc.Options = {
       },
     },
   },
-  // Points at TypeScript source files directly — swagger-jsdoc reads them
-  // as plain text for comments, it doesn't compile/execute them. If this
-  // API is ever deployed as a compiled-only dist/ build without the src/
-  // folder alongside it, this glob (or the docs route itself) would need
-  // to be disabled or pointed at dist/**/*.routes.js instead.
-  apis: ['./src/routes/*.routes.ts'],
+  // The route files next to this one: src/routes/*.ts in dev, and
+  // dist/routes/*.js in the compiled build (e.g. the Docker image) — tsc
+  // keeps the @openapi comments. swagger-jsdoc only reads them as text.
+  // Forward slashes because the glob library doesn't accept Windows "\".
+  apis: [path.join(__dirname, '..', 'routes', '*.routes.{ts,js}').split(path.sep).join('/')],
 };
 
 const swaggerSpec = swaggerJsdoc(options);

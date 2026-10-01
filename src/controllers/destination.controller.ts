@@ -1,15 +1,18 @@
 import { Request, Response } from 'express';
-import prisma from '../config/prisma';
+import { AppDataSource } from '../config/data-source';
+import { Destination } from '../entities/Destination';
 import asyncHandler from '../utils/asyncHandler';
 import ApiError from '../utils/ApiError';
 import slugify from '../utils/slugify';
 
+const destinationRepo = AppDataSource.getRepository(Destination);
+
 // GET /api/destinations
 // Public listing — only published destinations, newest first.
 const getDestinations = asyncHandler(async (req: Request, res: Response) => {
-  const destinations = await prisma.destination.findMany({
+  const destinations = await destinationRepo.find({
     where: { isPublished: true },
-    orderBy: { createdAt: 'desc' },
+    order: { createdAt: 'DESC' },
   });
 
   res.json({ success: true, data: destinations });
@@ -24,23 +27,24 @@ const getDestinationBySlug = asyncHandler(async (req: Request, res: Response) =>
   // asserting it away.
   const slug = Array.isArray(req.params.slug) ? req.params.slug[0] : req.params.slug;
 
-  const destination = await prisma.destination.findUnique({
-    where: { slug },
-    include: {
-      tours: {
-        where: { isPublished: true },
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          durationDays: true,
-          durationNights: true,
-          startingPrice: true,
-          featuredImage: true,
-        },
-      },
-    },
-  });
+  // QueryBuilder rather than find(): we want every destination column but
+  // only a few columns of each tour, and only the published tours — the
+  // condition goes in the JOIN itself, so a destination with no published
+  // tours still comes back (with tours: []).
+  const destination = await destinationRepo
+    .createQueryBuilder('destination')
+    .leftJoin('destination.tours', 'tour', 'tour.isPublished = :isPublished', { isPublished: true })
+    .addSelect([
+      'tour.id',
+      'tour.name',
+      'tour.slug',
+      'tour.durationDays',
+      'tour.durationNights',
+      'tour.startingPrice',
+      'tour.featuredImage',
+    ])
+    .where('destination.slug = :slug', { slug })
+    .getOne();
 
   if (!destination) {
     throw new ApiError(404, 'Destination not found');
@@ -67,13 +71,13 @@ const createDestination = asyncHandler(async (req: Request, res: Response) => {
 
   const slug = slugify(name);
 
-  const existing = await prisma.destination.findUnique({ where: { slug } });
+  const existing = await destinationRepo.findOneBy({ slug });
   if (existing) {
     throw new ApiError(409, `A destination named "${name}" already exists`);
   }
 
-  const destination = await prisma.destination.create({
-    data: {
+  const destination = await destinationRepo.save(
+    destinationRepo.create({
       name,
       slug,
       country,
@@ -85,8 +89,8 @@ const createDestination = asyncHandler(async (req: Request, res: Response) => {
       images: images || [],
       isFeatured: isFeatured ?? false,
       isPublished: isPublished ?? true,
-    },
-  });
+    }),
+  );
 
   res.status(201).json({ success: true, data: destination });
 });
@@ -95,7 +99,7 @@ const createDestination = asyncHandler(async (req: Request, res: Response) => {
 const updateDestination = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
 
-  const existing = await prisma.destination.findUnique({ where: { id } });
+  const existing = await destinationRepo.findOneBy({ id });
   if (!existing) {
     throw new ApiError(404, 'Destination not found');
   }
@@ -107,7 +111,7 @@ const updateDestination = asyncHandler(async (req: Request, res: Response) => {
     data.slug = slugify(data.name);
   }
 
-  const destination = await prisma.destination.update({ where: { id }, data });
+  const destination = await destinationRepo.save(destinationRepo.merge(existing, data));
   res.json({ success: true, data: destination });
 });
 
@@ -115,12 +119,12 @@ const updateDestination = asyncHandler(async (req: Request, res: Response) => {
 const deleteDestination = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
 
-  const existing = await prisma.destination.findUnique({ where: { id } });
+  const existing = await destinationRepo.findOneBy({ id });
   if (!existing) {
     throw new ApiError(404, 'Destination not found');
   }
 
-  await prisma.destination.delete({ where: { id } });
+  await destinationRepo.delete(id);
   res.json({ success: true, message: 'Destination deleted' });
 });
 

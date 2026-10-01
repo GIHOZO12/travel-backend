@@ -1,21 +1,38 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import prisma from '../config/prisma';
+import crypto from 'crypto';
+import { AppDataSource } from '../config/data-source';
+import { AdminUser } from '../entities/AdminUser';
+import { AdminRole } from '../entities/enums';
 import asyncHandler from '../utils/asyncHandler';
 import ApiError from '../utils/ApiError';
 import generateToken from '../utils/token';
+import { generateInviteToken, hashToken } from '../utils/inviteToken';
+import { notifyRoleChanged, notifyStaffInvite } from '../services/notifications';
 
-// Fields safe to send back to the client — never spread `...admin`, that
-// would leak the bcrypt password hash.
-const publicFields = { id: true, name: true, email: true, role: true, createdAt: true } as const;
+const adminRepo = AppDataSource.getRepository(AdminUser);
+
+// The fields safe to send back to the client — never send the entity itself,
+// that would leak the bcrypt password hash and the invite token's hash.
+// setPasswordTokenHash becomes a plain boolean: the Staff page needs to know
+// "has this person finished setup?" but the hash must never reach the client.
+function toPublicAdmin(admin: AdminUser) {
+  return {
+    id: admin.id,
+    name: admin.name,
+    email: admin.email,
+    role: admin.role,
+    createdAt: admin.createdAt,
+    hasPendingInvite: admin.setPasswordTokenHash !== null,
+  };
+}
 
 // POST /api/auth/login
 const login = asyncHandler(async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
-  const admin = await prisma.adminUser.findUnique({ where: { email } });
+  const admin = await adminRepo.findOneBy({ email });
   if (!admin) {
-
     throw new ApiError(401, 'Invalid email or password');
   }
 
@@ -46,33 +63,100 @@ const getMe = asyncHandler(async (req: Request, res: Response) => {
 // GET /api/auth/admins
 // ADMIN-only. Lists every staff/admin account, for the "Staff" management page.
 const getAdmins = asyncHandler(async (req: Request, res: Response) => {
-  const admins = await prisma.adminUser.findMany({
-    select: publicFields,
-    orderBy: { createdAt: 'asc' },
+  const admins = await adminRepo.find({
+    // Don't even load the password hash — only what toPublicAdmin needs.
+    select: { id: true, name: true, email: true, role: true, createdAt: true, setPasswordTokenHash: true },
+    order: { createdAt: 'ASC' },
   });
 
-  res.json({ success: true, data: admins });
+  res.json({ success: true, data: admins.map(toPublicAdmin) });
 });
 
 // POST /api/auth/admins
 // ADMIN-only — see requireAdmin in auth.routes.ts. Creates a STAFF account by
 // default; an explicit role: "ADMIN" is required to create a fellow admin.
+// No password is collected: `password` is filled with a random value nobody
+// will ever know (the schema requires *some* hash), and the new person sets
+// their real one by following the emailed invite link.
 const createAdmin = asyncHandler(async (req: Request, res: Response) => {
-  const { name, email, password, role } = req.body;
+  const { name, email, role } = req.body;
 
-  const existing = await prisma.adminUser.findUnique({ where: { email } });
+  const existing = await adminRepo.findOneBy({ email });
   if (existing) {
     throw new ApiError(409, `An admin with email "${email}" already exists`);
   }
 
+  const placeholderPassword = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+  const invite = generateInviteToken();
+
+  const admin = await adminRepo.save(
+    adminRepo.create({
+      name,
+      email,
+      role: role ?? AdminRole.STAFF,
+      password: placeholderPassword,
+      setPasswordTokenHash: invite.hash,
+      setPasswordExpires: invite.expires,
+    }),
+  );
+
+  // Fire-and-forget: account creation must succeed even if mail delivery
+  // fails or SMTP isn't configured (see services/notifications.ts).
+  void notifyStaffInvite(admin, invite.raw);
+
+  res.status(201).json({ success: true, data: toPublicAdmin(admin) });
+});
+
+// POST /api/auth/admins/:id/resend-invite
+// ADMIN-only. Only works for accounts that haven't finished setup yet
+// (hasPendingInvite) — an already-active account's password isn't touched.
+const resendInvite = asyncHandler(async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+
+  const existing = await adminRepo.findOneBy({ id });
+  if (!existing) {
+    throw new ApiError(404, 'Admin not found');
+  }
+  if (existing.setPasswordTokenHash === null) {
+    throw new ApiError(400, 'This account is already active — its invite was already used');
+  }
+
+  const invite = generateInviteToken();
+  existing.setPasswordTokenHash = invite.hash;
+  existing.setPasswordExpires = invite.expires;
+  const admin = await adminRepo.save(existing);
+
+  void notifyStaffInvite(admin, invite.raw);
+
+  res.json({ success: true, data: toPublicAdmin(admin) });
+});
+
+// POST /api/auth/set-password
+// PUBLIC — no login required. The token itself (emailed to the account
+// holder, never shown anywhere else) is the authentication. Single-use:
+// clears the token on success, so the same link can't be replayed. Returns a
+// JWT so the person lands signed in, same shape as POST /auth/login.
+const setPassword = asyncHandler(async (req: Request, res: Response) => {
+  const { token, password } = req.body;
+
+  const admin = await adminRepo.findOneBy({ setPasswordTokenHash: hashToken(token) });
+  if (!admin || !admin.setPasswordExpires || admin.setPasswordExpires < new Date()) {
+    throw new ApiError(400, 'This invite link is invalid or has expired. Ask an administrator to resend it.');
+  }
+
   const hashedPassword = await bcrypt.hash(password, 10);
+  // update() runs a single UPDATE ... WHERE id = ? without loading the row first.
+  await adminRepo.update(admin.id, { password: hashedPassword, setPasswordTokenHash: null, setPasswordExpires: null });
 
-  const admin = await prisma.adminUser.create({
-    data: { name, email, password: hashedPassword, role: role ?? 'STAFF' },
-    select: publicFields,
+  const jwt = generateToken(admin.id);
+
+  res.json({
+    success: true,
+    data: {
+      token: jwt,
+      admin: { id: admin.id, name: admin.name, email: admin.email, role: admin.role },
+    },
   });
-
-  res.status(201).json({ success: true, data: admin });
 });
 
 // PUT /api/auth/admins/:id
@@ -88,25 +172,30 @@ const updateAdmin = asyncHandler(async (req: Request, res: Response) => {
     throw new ApiError(400, 'You cannot change your own role');
   }
 
-  const existing = await prisma.adminUser.findUnique({ where: { id } });
+  const existing = await adminRepo.findOneBy({ id });
   if (!existing) {
     throw new ApiError(404, 'Admin not found');
   }
 
-  if (existing.role === 'ADMIN' && role === 'STAFF') {
-    const adminCount = await prisma.adminUser.count({ where: { role: 'ADMIN' } });
+  if (existing.role === AdminRole.ADMIN && role === AdminRole.STAFF) {
+    const adminCount = await adminRepo.count({ where: { role: AdminRole.ADMIN } });
     if (adminCount <= 1) {
       throw new ApiError(400, 'Cannot demote the only remaining administrator');
     }
   }
 
-  const admin = await prisma.adminUser.update({
-    where: { id },
-    data: { role },
-    select: publicFields,
-  });
+  existing.role = role;
+  const admin = await adminRepo.save(existing);
 
-  res.json({ success: true, data: admin });
+  // Fire-and-forget: the role change must succeed even if mail delivery
+  // fails or SMTP isn't configured (see services/notifications.ts). Skipped
+  // for a still-pending account — they haven't logged in yet, so "your role
+  // changed" would be a confusing email to get before "you have an account".
+  if (admin.setPasswordTokenHash === null) {
+    void notifyRoleChanged(admin);
+  }
+
+  res.json({ success: true, data: toPublicAdmin(admin) });
 });
 
 // DELETE /api/auth/admins/:id
@@ -118,20 +207,20 @@ const deleteAdmin = asyncHandler(async (req: Request, res: Response) => {
     throw new ApiError(400, 'You cannot delete your own account');
   }
 
-  const existing = await prisma.adminUser.findUnique({ where: { id } });
+  const existing = await adminRepo.findOneBy({ id });
   if (!existing) {
     throw new ApiError(404, 'Admin not found');
   }
 
-  if (existing.role === 'ADMIN') {
-    const adminCount = await prisma.adminUser.count({ where: { role: 'ADMIN' } });
+  if (existing.role === AdminRole.ADMIN) {
+    const adminCount = await adminRepo.count({ where: { role: AdminRole.ADMIN } });
     if (adminCount <= 1) {
       throw new ApiError(400, 'Cannot delete the only remaining administrator');
     }
   }
 
-  await prisma.adminUser.delete({ where: { id } });
+  await adminRepo.delete(id);
   res.json({ success: true, message: 'Admin account deleted' });
 });
 
-export { login, getMe, getAdmins, createAdmin, updateAdmin, deleteAdmin };
+export { login, getMe, getAdmins, createAdmin, resendInvite, setPassword, updateAdmin, deleteAdmin };

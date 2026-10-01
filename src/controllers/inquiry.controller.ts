@@ -1,9 +1,23 @@
 import { Request, Response } from 'express';
-import { InquiryStatus } from '@prisma/client';
-import prisma from '../config/prisma';
+import { AppDataSource } from '../config/data-source';
+import { Inquiry } from '../entities/Inquiry';
+import { InquiryStatus } from '../entities/enums';
 import asyncHandler from '../utils/asyncHandler';
 import ApiError from '../utils/ApiError';
 import { notifyNewInquiry } from '../services/notifications';
+
+const inquiryRepo = AppDataSource.getRepository(Inquiry);
+
+// Every inquiry column plus a small summary of its tour (id, name, slug).
+// LEFT join because the tour is optional — inquiries without one still come
+// back.
+const inquiryWithTour = () =>
+  inquiryRepo
+    .createQueryBuilder('inquiry')
+    .leftJoin('inquiry.tour', 'tour')
+    .addSelect(['tour.id', 'tour.name', 'tour.slug']);
+
+const findInquiryById = (id: number) => inquiryWithTour().where('inquiry.id = :id', { id }).getOne();
 
 // POST /api/inquiries
 // PUBLIC — any website visitor can submit this. No auth required. This is
@@ -20,8 +34,8 @@ const createInquiry = asyncHandler(async (req: Request, res: Response) => {
     message,
   } = req.body;
 
-  const inquiry = await prisma.inquiry.create({
-    data: {
+  const saved = await inquiryRepo.save(
+    inquiryRepo.create({
       fullName,
       email,
       phone,
@@ -29,12 +43,12 @@ const createInquiry = asyncHandler(async (req: Request, res: Response) => {
       preferredDate,
       numberOfTravelers,
       message,
-      // tourId is optional on this model — only attach the relation if
-      // one was actually provided.
-      ...(tourId ? { tour: { connect: { id: tourId } } } : {}),
-    },
-    include: { tour: { select: { id: true, name: true, slug: true } } },
-  });
+      // tourId is optional on this model — null when none was provided.
+      tourId: tourId || null,
+    }),
+  );
+  // Re-read to include the tour summary — the emails need the tour's name.
+  const inquiry = (await findInquiryById(saved.id))!;
 
   // Fire-and-forget: the response doesn't wait for (or fail because of) email.
   void notifyNewInquiry(inquiry);
@@ -53,13 +67,11 @@ const getInquiries = asyncHandler(async (req: Request, res: Response) => {
   const { status } = req.query;
   const isValidStatus = typeof status === 'string' && Object.values(InquiryStatus).includes(status as InquiryStatus);
 
-  const inquiries = await prisma.inquiry.findMany({
-    where: isValidStatus ? { status: status as InquiryStatus } : undefined,
-    orderBy: { createdAt: 'desc' },
-    include: {
-      tour: { select: { id: true, name: true, slug: true } },
-    },
-  });
+  const query = inquiryWithTour().orderBy('inquiry.createdAt', 'DESC');
+  if (isValidStatus) {
+    query.where('inquiry.status = :status', { status });
+  }
+  const inquiries = await query.getMany();
 
   res.json({ success: true, data: inquiries });
 });
@@ -69,12 +81,7 @@ const getInquiries = asyncHandler(async (req: Request, res: Response) => {
 const getInquiryById = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
 
-  const inquiry = await prisma.inquiry.findUnique({
-    where: { id },
-    include: {
-      tour: { select: { id: true, name: true, slug: true } },
-    },
-  });
+  const inquiry = await findInquiryById(id);
 
   if (!inquiry) {
     throw new ApiError(404, 'Inquiry not found');
@@ -89,25 +96,13 @@ const getInquiryById = asyncHandler(async (req: Request, res: Response) => {
 const updateInquiry = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
 
-  const existing = await prisma.inquiry.findUnique({ where: { id } });
+  const existing = await inquiryRepo.findOneBy({ id });
   if (!existing) {
     throw new ApiError(404, 'Inquiry not found');
   }
 
-  const { tourId, ...rest } = req.body;
-  const data: Record<string, unknown> = { ...rest };
-
-  if (tourId) {
-    data.tour = { connect: { id: tourId } };
-  }
-
-  const inquiry = await prisma.inquiry.update({
-    where: { id },
-    data,
-    include: {
-      tour: { select: { id: true, name: true, slug: true } },
-    },
-  });
+  await inquiryRepo.save(inquiryRepo.merge(existing, req.body));
+  const inquiry = await findInquiryById(id);
 
   res.json({ success: true, data: inquiry });
 });
@@ -117,12 +112,12 @@ const updateInquiry = asyncHandler(async (req: Request, res: Response) => {
 const deleteInquiry = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
 
-  const existing = await prisma.inquiry.findUnique({ where: { id } });
+  const existing = await inquiryRepo.findOneBy({ id });
   if (!existing) {
     throw new ApiError(404, 'Inquiry not found');
   }
 
-  await prisma.inquiry.delete({ where: { id } });
+  await inquiryRepo.delete(id);
   res.json({ success: true, message: 'Inquiry deleted' });
 });
 

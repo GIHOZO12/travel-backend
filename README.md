@@ -1,6 +1,6 @@
 # Travel & Tour Company Website — Backend
 
-Express + TypeScript + PostgreSQL (via Prisma) API for the travel/tour
+Express + TypeScript + PostgreSQL (via TypeORM) API for the travel/tour
 website described in the project SRS.
 
 ## Stack
@@ -9,7 +9,7 @@ website described in the project SRS.
 - **TypeScript** — compiled to `dist/` for production, run directly via
   `tsx` in dev (no separate build step needed while developing)
 - **PostgreSQL** — relational database
-- **Prisma** — ORM: schema, migrations, type-safe query client
+- **TypeORM** — ORM: entity classes, migrations, repositories & query builder
 - **JWT + bcryptjs** — admin authentication (added in Phase 4)
 - **express-validator** — request validation
 - **helmet, cors, express-rate-limit** — baseline security
@@ -17,14 +17,18 @@ website described in the project SRS.
 ## Project structure
 
 ```
-prisma/
-  schema.prisma        # database schema — source of truth for all tables
 tsconfig.json           # TypeScript compiler config
 src/
   app.ts                # Express app: middleware + route mounting
-  server.ts              # entry point — starts the HTTP server
+  server.ts              # entry point — connects to the DB, then starts the HTTP server
+  seed.ts                # creates the first admin account (npm run seed)
   config/
-    prisma.ts            # shared PrismaClient instance
+    data-source.ts       # shared TypeORM DataSource (connection + entity list)
+  entities/              # one class per table — source of truth for the schema
+    Destination.ts
+    Tour.ts
+    enums.ts             # AdminRole, InquiryStatus, BookingStatus
+  migrations/            # versioned schema changes (npm run migration:*)
   routes/
     index.ts             # mounts every feature's routes under /api
     destination.routes.ts
@@ -35,7 +39,7 @@ src/
     destination.validator.ts
     tour.validator.ts
   middleware/
-    errorHandler.ts       # central error formatting (incl. Prisma errors)
+    errorHandler.ts       # central error formatting (incl. database errors)
     notFound.ts            # 404 fallback
     validate.ts             # runs express-validator rule results
   utils/
@@ -68,22 +72,40 @@ BlogPost) follows the same four-file pattern as Destination:
    npm install
    ```
 
-4. **Run the first migration** — this reads `prisma/schema.prisma` and
-   creates all the tables in your database:
+4. **Run the migrations** — this creates all the tables in your database:
    ```
-   npx prisma migrate dev --name init
+   npm run migration:run
+   ```
+   (On a database that was first set up with Prisma, the initial migration
+   sees the tables already exist and only records itself as done — no data
+   is touched.)
+
+5. **Create the first admin account** (uses the `SEED_ADMIN_*` values in `.env`):
+   ```
+   npm run seed
    ```
 
-5. **Start the dev server:**
+6. **Start the dev server:**
    ```
    npm run dev
    ```
    You should see `Server running on http://localhost:5000`.
 
-6. **Sanity check:**
+7. **Sanity check:**
    ```
    curl http://localhost:5000/api/health
    ```
+
+## Running with Docker
+
+Run the API and PostgreSQL in containers with one command:
+
+```
+docker compose up -d --build
+```
+
+See **[DOCKER.md](DOCKER.md)** for the full step-by-step guide (setup, everyday
+commands, moving your data, troubleshooting).
 
 ## Useful commands
 
@@ -93,9 +115,11 @@ BlogPost) follows the same four-file pattern as Destination:
 | `npm run typecheck` | Run the TypeScript compiler in check-only mode — no output files, just errors. Run this often. |
 | `npm run build` | Compile `src/**/*.ts` to `dist/**/*.js` for production |
 | `npm start` | Run the compiled production build (`node dist/server.js`) — requires `npm run build` first |
-| `npx prisma migrate dev --name <change>` | Create + apply a new migration after editing schema.prisma |
-| `npx prisma studio` | Opens a GUI in the browser to browse/edit your database rows |
-| `npx prisma generate` | Regenerate the Prisma Client (usually automatic after migrate) |
+| `npm run migration:generate -- src/migrations/<Name>` | After editing an entity: compares entities with the database and writes a migration file with the SQL needed |
+| `npm run migration:run` | Apply every migration that hasn't run yet |
+| `npm run migration:revert` | Undo the most recent migration (runs its `down()`) |
+| `npm run migration:show` | List migrations and whether each has run |
+| `npm run seed` | Create the first admin account from `.env` |
 
 ## API so far
 

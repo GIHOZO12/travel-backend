@@ -1,13 +1,17 @@
 import { mailConfig, transporter } from '../config/mailer';
 import {
+  AdminAccountEmailData,
   BookingEmailData,
   InquiryEmailData,
   customerBookingReceived,
   customerBookingStatus,
   customerInquiryReceived,
+  staffInvite,
   staffNewBooking,
   staffNewInquiry,
+  staffRoleChanged,
 } from './emailTemplates';
+import { INVITE_EXPIRY_HOURS } from '../utils/inviteToken';
 
 interface Message {
   to: string;
@@ -48,6 +52,25 @@ export async function notifyBookingStatusChange(booking: BookingEmailData): Prom
   const customer = customerBookingStatus(mailConfig.companyName, booking);
   if (!customer) return;
   await send({ to: booking.email, ...customer });
+}
+
+// Sends the "set your password" invite link — on account creation, and again
+// whenever an admin clicks "Resend invite" for a still-pending account.
+// `rawToken` is the plaintext token (never stored — see inviteToken.ts); this
+// is the only place it exists outside of the moment it was generated.
+export async function notifyStaffInvite(admin: AdminAccountEmailData, rawToken: string): Promise<void> {
+  const setPasswordUrl = `${process.env.CLIENT_URL || 'http://localhost:3000'}/admin/set-password?token=${rawToken}`;
+  const message = staffInvite(mailConfig.companyName, admin, setPasswordUrl, INVITE_EXPIRY_HOURS);
+  await send({ to: admin.email, ...message });
+}
+
+// Tells an existing account its role just changed (promoted/demoted). See
+// auth.controller.ts's updateAdmin — separate from notifyAdminAccountCreated,
+// which only fires once, when the account is first made.
+export async function notifyRoleChanged(admin: AdminAccountEmailData): Promise<void> {
+  const loginUrl = `${process.env.CLIENT_URL || 'http://localhost:3000'}/admin/login`;
+  const message = staffRoleChanged(mailConfig.companyName, admin, loginUrl);
+  await send({ to: admin.email, ...message });
 }
 
 export async function notifyNewInquiry(inquiry: InquiryEmailData): Promise<void> {

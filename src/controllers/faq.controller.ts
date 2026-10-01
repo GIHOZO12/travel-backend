@@ -1,14 +1,17 @@
 import { Request, Response } from 'express';
-import prisma from '../config/prisma';
+import { AppDataSource } from '../config/data-source';
+import { Faq } from '../entities/Faq';
 import asyncHandler from '../utils/asyncHandler';
 import ApiError from '../utils/ApiError';
+
+const faqRepo = AppDataSource.getRepository(Faq);
 
 // GET /api/faqs — public, published only, ordered by `order` (the
 // admin-controlled display sequence from SRS §45), then id as a tiebreak.
 const getFAQs = asyncHandler(async (req: Request, res: Response) => {
-  const faqs = await prisma.fAQ.findMany({
+  const faqs = await faqRepo.find({
     where: { isPublished: true },
-    orderBy: [{ order: 'asc' }, { id: 'asc' }],
+    order: { order: 'ASC', id: 'ASC' },
   });
 
   res.json({ success: true, data: faqs });
@@ -18,14 +21,16 @@ const getFAQs = asyncHandler(async (req: Request, res: Response) => {
 const createFAQ = asyncHandler(async (req: Request, res: Response) => {
   const { question, answer, order, isPublished } = req.body;
 
-  const faq = await prisma.fAQ.create({
-    data: {
+  // create() only builds the object in memory; save() INSERTs it and fills
+  // in the generated id.
+  const faq = await faqRepo.save(
+    faqRepo.create({
       question,
       answer,
       order: order ?? 0,
       isPublished: isPublished ?? true,
-    },
-  });
+    }),
+  );
 
   res.status(201).json({ success: true, data: faq });
 });
@@ -34,12 +39,14 @@ const createFAQ = asyncHandler(async (req: Request, res: Response) => {
 const updateFAQ = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
 
-  const existing = await prisma.fAQ.findUnique({ where: { id } });
+  const existing = await faqRepo.findOneBy({ id });
   if (!existing) {
     throw new ApiError(404, 'FAQ not found');
   }
 
-  const faq = await prisma.fAQ.update({ where: { id }, data: req.body });
+  // merge() copies the request's fields onto the loaded entity (ignoring
+  // anything that isn't a column); save() then UPDATEs just what changed.
+  const faq = await faqRepo.save(faqRepo.merge(existing, req.body));
   res.json({ success: true, data: faq });
 });
 
@@ -47,12 +54,12 @@ const updateFAQ = asyncHandler(async (req: Request, res: Response) => {
 const deleteFAQ = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
 
-  const existing = await prisma.fAQ.findUnique({ where: { id } });
+  const existing = await faqRepo.findOneBy({ id });
   if (!existing) {
     throw new ApiError(404, 'FAQ not found');
   }
 
-  await prisma.fAQ.delete({ where: { id } });
+  await faqRepo.delete(id);
   res.json({ success: true, message: 'FAQ deleted' });
 });
 

@@ -1,4 +1,4 @@
-import type { AdminRole } from '@prisma/client';
+import type { AdminRole } from '../../entities/enums';
 
 // Module augmentation: adds `user` to Express's Request type, set by the
 // `protect` middleware once a JWT has been verified. Without this, every

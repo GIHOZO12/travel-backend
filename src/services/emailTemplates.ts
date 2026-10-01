@@ -179,6 +179,61 @@ export function staffNewInquiry(company: string, i: InquiryEmailData) {
   };
 }
 
+export interface AdminAccountEmailData {
+  name: string;
+  email: string;
+  role: string;
+}
+
+// Sent when an ADMIN creates a staff/admin account, and again if that admin
+// clicks "Resend invite" (see createAdmin / resendInvite in
+// auth.controller.ts). No password is ever included — the recipient chooses
+// their own by following this link, which is single-use and expires.
+export function staffInvite(
+  company: string,
+  admin: AdminAccountEmailData,
+  setPasswordUrl: string,
+  expiryHours: number,
+) {
+  const roleLabel = admin.role === 'ADMIN' ? 'Administrator' : 'Staff Member';
+
+  return {
+    subject: oneLine(`You've been invited to the ${company} dashboard`),
+    html: layout(
+      company,
+      "You've been invited",
+      `<p>Dear ${esc(admin.name)},</p>
+       <p>An account has been created for you on the ${esc(company)} admin dashboard, with the role of <strong>${esc(roleLabel)}</strong>.</p>
+       <p>Click below to set your own password and sign in. This link expires in ${expiryHours} hours and can only be used once.</p>
+       <p style="margin:24px 0;">
+         <a href="${esc(setPasswordUrl)}" style="background:#18181b;color:#ffffff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;">Set your password</a>
+       </p>
+       <p style="font-size:13px;color:#71717a;">If the button doesn't work, copy and paste this link into your browser: ${esc(setPasswordUrl)}</p>`,
+    ),
+  };
+}
+
+// Sent when an ADMIN changes an existing account's role (promote/demote —
+// see updateAdmin in auth.controller.ts). Separate from staffAccountCreated,
+// which only fires once, when the account is first made.
+export function staffRoleChanged(company: string, admin: AdminAccountEmailData, loginUrl: string) {
+  const roleLabel = admin.role === 'ADMIN' ? 'Administrator' : 'Staff Member';
+
+  return {
+    subject: oneLine(`Your ${company} account role has changed`),
+    html: layout(
+      company,
+      'Your account role has changed',
+      `<p>Dear ${esc(admin.name)},</p>
+       <p>Your role on the ${esc(company)} admin dashboard has been changed to <strong>${esc(roleLabel)}</strong>.</p>
+       <p style="margin:24px 0;">
+         <a href="${esc(loginUrl)}" style="background:#18181b;color:#ffffff;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;">Sign in to the dashboard</a>
+       </p>
+       <p style="font-size:13px;color:#71717a;">If you weren't expecting this change, please contact your administrator.</p>`,
+    ),
+  };
+}
+
 export function customerInquiryReceived(company: string, i: InquiryEmailData) {
   return {
     subject: oneLine(`We received your inquiry - ${company}`),

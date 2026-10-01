@@ -1,7 +1,10 @@
 import { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import prisma from '../config/prisma';
+import { AppDataSource } from '../config/data-source';
+import { AdminUser } from '../entities/AdminUser';
 import ApiError from '../utils/ApiError';
+
+const adminRepo = AppDataSource.getRepository(AdminUser);
 
 interface TokenPayload {
   id: number;
@@ -32,7 +35,7 @@ const protect = async (req: Request, res: Response, next: NextFunction): Promise
     // Re-fetch from the DB rather than trusting the token payload alone —
     // this way a deleted admin is locked out immediately, not just after
     // their existing token happens to expire.
-    const admin = await prisma.adminUser.findUnique({ where: { id: decoded.id } });
+    const admin = await adminRepo.findOneBy({ id: decoded.id });
     if (!admin) {
       next(new ApiError(401, 'Not authorized — admin no longer exists'));
       return;

@@ -1,0 +1,113 @@
+# CI = Continuous Integration: automatically check every change before it's
+# merged. If any step fails, the pull request shows a red ✗ instead of a ✓.
+#
+# Runs on:
+#   - every push to `develop`
+#   - every pull request into `develop` or `main`
+#   - when release.yml calls it (before publishing an image)
+
+name: CI
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [develop, main]
+  workflow_call:
+
+jobs:
+  check:
+    name: Typecheck, build, migrations & smoke test
+    runs-on: ubuntu-latest
+
+    # A throwaway PostgreSQL just for this run — deleted when the job ends.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: travel_tour_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    # Fake values for CI only — never put real secrets in this file.
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/travel_tour_ci
+      JWT_SECRET: ci-only-not-a-real-secret
+      JWT_EXPIRES_IN: 1d
+      PORT: 5000
+      SEED_ADMIN_NAME: CI Admin
+      SEED_ADMIN_EMAIL: ci-admin@example.com
+      SEED_ADMIN_PASSWORD: ci-password-123
+
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm # reuses downloaded packages between runs
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      # Proves the migrations can build the whole schema from nothing.
+      - name: Run migrations on an empty database
+        run: npm run migration:run
+
+      # Fails if someone changed an entity but forgot to generate a migration.
+      - name: Check entities and migrations are in sync
+        run: npm run typeorm -- migration:generate src/migrations/Check --check
+
+      - name: Seed the first admin
+        run: npm run seed:prod
+
+      # Start the compiled server for real and call a few endpoints.
+      - name: Smoke test the API
+        run: |
+          node dist/server.js &
+          for _ in $(seq 1 30); do
+            curl -sf http://localhost:5000/api/health && break
+            sleep 1
+          done
+          echo
+          curl -sf http://localhost:5000/api/health
+          curl -sf http://localhost:5000/api/tours
+          curl -sf -X POST http://localhost:5000/api/auth/login \
+            -H "Content-Type: application/json" \
+            -d "{\"email\":\"$SEED_ADMIN_EMAIL\",\"password\":\"$SEED_ADMIN_PASSWORD\"}" \
+            | grep -q '"token"'
+          echo "Smoke test passed"
+
+  docker:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build only (push: false) — just proves the Dockerfile still works.
+      - name: Build the image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
