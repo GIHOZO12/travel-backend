@@ -54,7 +54,7 @@ router.get('/:slug', getBlogPostBySlug);
  * @openapi
  * /blog:
  *   post:
- *     summary: Create a blog post (admin-only)
+ *     summary: Create a blog post (any logged-in admin or staff account)
  *     tags: [Blog]
  *     security:
  *       - bearerAuth: []
@@ -81,13 +81,13 @@ router.get('/:slug', getBlogPostBySlug);
  *       409:
  *         description: A post with that title/slug already exists.
  */
-router.post('/', protect, requireAdmin, createBlogPostRules, validate, createBlogPost);
+router.post('/', protect, createBlogPostRules, validate, createBlogPost);
 
 /**
  * @openapi
  * /blog/{id}:
  *   put:
- *     summary: Update a blog post (admin-only)
+ *     summary: Update a blog post (any logged-in admin or staff account)
  *     tags: [Blog]
  *     security:
  *       - bearerAuth: []
@@ -105,7 +105,7 @@ router.post('/', protect, requireAdmin, createBlogPostRules, validate, createBlo
  *       404:
  *         description: No post with that id.
  */
-router.put('/:id', protect, requireAdmin, updateBlogPostRules, validate, updateBlogPost);
+router.put('/:id', protect, updateBlogPostRules, validate, updateBlogPost);
 
 /**
  * @openapi

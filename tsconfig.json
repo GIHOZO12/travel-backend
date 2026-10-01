@@ -12,7 +12,14 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "declaration": false,
-    "sourceMap": true
+    "sourceMap": true,
+
+    // Needed by TypeORM's @Entity / @Column decorators.
+    "experimentalDecorators": true,
+    // Entity properties are filled in by TypeORM, not a constructor.
+    "strictPropertyInitialization": false,
+    // Stops class fields being initialised to `undefined`, which TypeORM entities don't expect.
+    "useDefineForClassFields": false
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]

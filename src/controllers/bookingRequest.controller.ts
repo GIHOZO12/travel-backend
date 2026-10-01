@@ -1,9 +1,21 @@
 import { Request, Response } from 'express';
-import { BookingStatus } from '@prisma/client';
-import prisma from '../config/prisma';
+import { AppDataSource } from '../config/data-source';
+import { BookingRequest } from '../entities/BookingRequest';
+import { BookingStatus } from '../entities/enums';
 import asyncHandler from '../utils/asyncHandler';
 import ApiError from '../utils/ApiError';
 import { notifyBookingStatusChange, notifyNewBooking } from '../services/notifications';
+
+const bookingRepo = AppDataSource.getRepository(BookingRequest);
+
+// Every booking column plus a small summary of its tour (id, name, slug).
+const bookingWithTour = () =>
+  bookingRepo
+    .createQueryBuilder('booking')
+    .leftJoin('booking.tour', 'tour')
+    .addSelect(['tour.id', 'tour.name', 'tour.slug']);
+
+const findBookingById = (id: number) => bookingWithTour().where('booking.id = :id', { id }).getOne();
 
 // POST /api/booking-requests
 // PUBLIC — any website visitor can submit this. No auth required
@@ -21,8 +33,8 @@ const createBookingRequest = asyncHandler(async (req: Request, res: Response) =>
     tourId,
   } = req.body;
 
-  const bookingRequest = await prisma.bookingRequest.create({
-    data: {
+  const saved = await bookingRepo.save(
+    bookingRepo.create({
       fullName,
       email,
       phone,
@@ -31,10 +43,11 @@ const createBookingRequest = asyncHandler(async (req: Request, res: Response) =>
       numberOfTravelers,
       accommodationPref,
       specialRequests,
-      tour: { connect: { id: tourId } },
-    },
-    include: { tour: { select: { id: true, name: true, slug: true } } },
-  });
+      tourId,
+    }),
+  );
+  // Re-read to include the tour summary — the emails need the tour's name.
+  const bookingRequest = (await findBookingById(saved.id))!;
 
   // Fire-and-forget: the response doesn't wait for (or fail because of) email.
   void notifyNewBooking(bookingRequest);
@@ -52,13 +65,11 @@ const getBookingRequests = asyncHandler(async (req: Request, res: Response) => {
   const { status } = req.query;
   const isValidStatus = typeof status === 'string' && Object.values(BookingStatus).includes(status as BookingStatus);
 
-  const bookingRequests = await prisma.bookingRequest.findMany({
-    where: isValidStatus ? { status: status as BookingStatus } : undefined,
-    orderBy: { createdAt: 'desc' },
-    include: {
-      tour: { select: { id: true, name: true, slug: true } },
-    },
-  });
+  const query = bookingWithTour().orderBy('booking.createdAt', 'DESC');
+  if (isValidStatus) {
+    query.where('booking.status = :status', { status });
+  }
+  const bookingRequests = await query.getMany();
 
   res.json({ success: true, data: bookingRequests });
 });
@@ -68,12 +79,7 @@ const getBookingRequests = asyncHandler(async (req: Request, res: Response) => {
 const getBookingRequestById = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
 
-  const bookingRequest = await prisma.bookingRequest.findUnique({
-    where: { id },
-    include: {
-      tour: { select: { id: true, name: true, slug: true } },
-    },
-  });
+  const bookingRequest = await findBookingById(id);
 
   if (!bookingRequest) {
     throw new ApiError(404, 'Booking request not found');
@@ -89,28 +95,19 @@ const getBookingRequestById = asyncHandler(async (req: Request, res: Response) =
 const updateBookingRequest = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
 
-  const existing = await prisma.bookingRequest.findUnique({ where: { id } });
+  const existing = await bookingRepo.findOneBy({ id });
   if (!existing) {
     throw new ApiError(404, 'Booking request not found');
   }
 
-  const { tourId, ...rest } = req.body;
-  const data: Record<string, unknown> = { ...rest };
+  // Remember the old status before merge() overwrites it on `existing`.
+  const previousStatus = existing.status;
 
-  if (tourId) {
-    data.tour = { connect: { id: tourId } };
-  }
-
-  const bookingRequest = await prisma.bookingRequest.update({
-    where: { id },
-    data,
-    include: {
-      tour: { select: { id: true, name: true, slug: true } },
-    },
-  });
+  await bookingRepo.save(bookingRepo.merge(existing, req.body));
+  const bookingRequest = (await findBookingById(id))!;
 
   // Email the customer when staff move the booking to a new status.
-  if (bookingRequest.status !== existing.status) {
+  if (bookingRequest.status !== previousStatus) {
     void notifyBookingStatusChange(bookingRequest);
   }
 
@@ -122,12 +119,12 @@ const updateBookingRequest = asyncHandler(async (req: Request, res: Response) =>
 const deleteBookingRequest = asyncHandler(async (req: Request, res: Response) => {
   const id = Number(req.params.id);
 
-  const existing = await prisma.bookingRequest.findUnique({ where: { id } });
+  const existing = await bookingRepo.findOneBy({ id });
   if (!existing) {
     throw new ApiError(404, 'Booking request not found');
   }
 
-  await prisma.bookingRequest.delete({ where: { id } });
+  await bookingRepo.delete(id);
   res.json({ success: true, message: 'Booking request deleted' });
 });
 

@@ -1,5 +1,8 @@
 import { body, param, ValidationChain } from 'express-validator';
-import prisma from '../config/prisma';
+import { AppDataSource } from '../config/data-source';
+import { Destination } from '../entities/Destination';
+
+const destinationRepo = AppDataSource.getRepository(Destination);
 
 const idParamRule = param('id').isInt().withMessage('Invalid tour id').toInt();
 
@@ -10,8 +13,8 @@ const destinationExistsRule = (chain: ValidationChain): ValidationChain =>
     .isInt().withMessage('destinationId must be an integer')
     .bail()
     .custom(async (value: string) => {
-      const destination = await prisma.destination.findUnique({ where: { id: Number(value) } });
-      if (!destination) throw new Error('No destination exists with that id');
+      const exists = await destinationRepo.existsBy({ id: Number(value) });
+      if (!exists) throw new Error('No destination exists with that id');
       return true;
     })
     .toInt();

@@ -7,20 +7,20 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio",
-    "prisma:seed": "prisma db seed"
-  },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "typeorm": "tsx ./node_modules/typeorm/cli.js -d src/config/data-source.ts",
+    "migration:generate": "npm run typeorm -- migration:generate",
+    "migration:run": "npm run typeorm -- migration:run",
+    "migration:revert": "npm run typeorm -- migration:revert",
+    "migration:show": "npm run typeorm -- migration:show",
+    "seed": "tsx src/seed.ts",
+    "migration:run:prod": "typeorm migration:run -d dist/config/data-source.js",
+    "seed:prod": "node dist/seed.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "Backend API for the Travel & Tour Company Website (Express + PostgreSQL/Prisma).",
+  "description": "Backend API for the Travel & Tour Company Website (Express + PostgreSQL/TypeORM).",
   "dependencies": {
-    "@prisma/client": "6.19.3",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
@@ -32,8 +32,11 @@
     "morgan": "^1.12.1",
     "multer": "^2.4.0",
     "nodemailer": "^10.0.10",
+    "pg": "^8.13.0",
+    "reflect-metadata": "^0.2.2",
     "swagger-jsdoc": "^6.3.0",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "typeorm": "^0.3.20"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -44,9 +47,9 @@
     "@types/multer": "^2.2.0",
     "@types/node": "^22.20.3",
     "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.11.10",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
-    "prisma": "6.19.3",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2"
   }

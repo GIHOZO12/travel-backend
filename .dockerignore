@@ -1,0 +1,18 @@
+# Files Docker should NOT copy into the build. Keeps the image small and
+# keeps secrets (.env) out of it — environment variables are passed in at
+# runtime by docker-compose.yml instead.
+node_modules
+dist
+uploads
+logs
+*.log
+.env
+.env.*
+.git
+.gitignore
+.vscode
+.claude
+Dockerfile
+docker-compose.yml
+.dockerignore
+*.md

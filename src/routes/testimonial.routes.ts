@@ -34,7 +34,7 @@ router.get('/', getTestimonials);
  * @openapi
  * /testimonials/all:
  *   get:
- *     summary: List every testimonial, approved or not (admin-only)
+ *     summary: List every testimonial, approved or not (any logged-in admin or staff account)
  *     description: 'Used to review pending testimonials before approving them.'
  *     tags: [Testimonials]
  *     security:
@@ -45,13 +45,13 @@ router.get('/', getTestimonials);
  *       401:
  *         description: Missing, invalid or expired token.
  */
-router.get('/all', protect, requireAdmin, getAllTestimonials);
+router.get('/all', protect, getAllTestimonials);
 
 /**
  * @openapi
  * /testimonials:
  *   post:
- *     summary: Add a testimonial (admin-only)
+ *     summary: Add a testimonial (any logged-in admin or staff account)
  *     description: 'isApproved defaults to false — set it true (here or via PUT) once reviewed, to make it appear on the public site.'
  *     tags: [Testimonials]
  *     security:
@@ -76,13 +76,13 @@ router.get('/all', protect, requireAdmin, getAllTestimonials);
  *       401:
  *         description: Missing, invalid or expired token.
  */
-router.post('/', protect, requireAdmin, createTestimonialRules, validate, createTestimonial);
+router.post('/', protect, createTestimonialRules, validate, createTestimonial);
 
 /**
  * @openapi
  * /testimonials/{id}:
  *   put:
- *     summary: Update a testimonial, or approve it (admin-only)
+ *     summary: Update a testimonial, or approve it (any logged-in admin or staff account)
  *     tags: [Testimonials]
  *     security:
  *       - bearerAuth: []
@@ -100,7 +100,7 @@ router.post('/', protect, requireAdmin, createTestimonialRules, validate, create
  *       404:
  *         description: No testimonial with that id.
  */
-router.put('/:id', protect, requireAdmin, updateTestimonialRules, validate, updateTestimonial);
+router.put('/:id', protect, updateTestimonialRules, validate, updateTestimonial);
 
 /**
  * @openapi

@@ -6,9 +6,6 @@ npm-debug.log*
 # TypeScript build output
 dist/
 
-# Prisma
-prisma/*.db
-
 # User-uploaded images
 uploads/
 

@@ -1,10 +1,25 @@
 import { Router } from 'express';
 
-import { login, getMe, getAdmins, createAdmin, updateAdmin, deleteAdmin } from '../controllers/auth.controller';
+import {
+  login,
+  getMe,
+  getAdmins,
+  createAdmin,
+  resendInvite,
+  setPassword,
+  updateAdmin,
+  deleteAdmin,
+} from '../controllers/auth.controller';
 import protect from '../middleware/protect';
 import requireAdmin from '../middleware/requireAdmin';
 import validate from '../middleware/validate';
-import { loginRules, createAdminRules, updateAdminRules, idParamRule } from '../validators/auth.validator';
+import {
+  loginRules,
+  createAdminRules,
+  updateAdminRules,
+  setPasswordRules,
+  idParamRule,
+} from '../validators/auth.validator';
 
 const router = Router();
 
@@ -59,6 +74,39 @@ router.post('/login', loginRules, validate, login);
 
 /**
  * @openapi
+ * /auth/set-password:
+ *   post:
+ *     summary: Set a password using an emailed invite link (public)
+ *     description: 'No login required — the token itself (from the "Set your password" email) is the authentication. Single-use: the link stops working once used. Returns a JWT, so the person is signed in immediately.'
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [token, password]
+ *             properties:
+ *               token:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 minLength: 8
+ *     responses:
+ *       200:
+ *         description: Password set. Signed in.
+ *       400:
+ *         description: The link is invalid, already used, or expired.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiErrorResponse'
+ */
+router.post('/set-password', setPasswordRules, validate, setPassword);
+
+/**
+ * @openapi
  * /auth/me:
  *   get:
  *     summary: Get the currently logged-in admin
@@ -97,7 +145,7 @@ router.get('/me', protect, getMe);
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Array of admin accounts, oldest first.
+ *         description: 'Array of admin accounts, oldest first. Each includes hasPendingInvite: true if they have not yet set their own password.'
  *       401:
  *         description: Missing, invalid or expired token.
  *       403:
@@ -114,7 +162,7 @@ router.get('/admins', protect, requireAdmin, getAdmins);
  * /auth/admins:
  *   post:
  *     summary: Create a staff or admin account (admin-only)
- *     description: 'Requires an existing ADMIN to be logged in. role defaults to STAFF when omitted.'
+ *     description: 'Requires an existing ADMIN to be logged in. role defaults to STAFF when omitted. No password is collected here — the new account is emailed a "set your password" invite link instead.'
  *     tags: [Auth]
  *     security:
  *       - bearerAuth: []
@@ -124,7 +172,7 @@ router.get('/admins', protect, requireAdmin, getAdmins);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [name, email, password]
+ *             required: [name, email]
  *             properties:
  *               name:
  *                 type: string
@@ -132,17 +180,13 @@ router.get('/admins', protect, requireAdmin, getAdmins);
  *               email:
  *                 type: string
  *                 format: email
- *               password:
- *                 type: string
- *                 format: password
- *                 minLength: 8
  *               role:
  *                 type: string
  *                 enum: [ADMIN, STAFF]
  *                 default: STAFF
  *     responses:
  *       201:
- *         description: Admin created.
+ *         description: Admin created and invited.
  *       401:
  *         description: Missing, invalid or expired token.
  *       403:
@@ -155,6 +199,35 @@ router.get('/admins', protect, requireAdmin, getAdmins);
  *               $ref: '#/components/schemas/ApiErrorResponse'
  */
 router.post('/admins', protect, requireAdmin, createAdminRules, validate, createAdmin);
+
+/**
+ * @openapi
+ * /auth/admins/{id}/resend-invite:
+ *   post:
+ *     summary: Resend the "set your password" invite (admin-only)
+ *     description: 'Only works for accounts that have not finished setup yet (hasPendingInvite: true). Generates a new link; the old one stops working.'
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Invite resent.
+ *       400:
+ *         description: This account is already active.
+ *       401:
+ *         description: Missing, invalid or expired token.
+ *       403:
+ *         description: Logged in, but not an administrator.
+ *       404:
+ *         description: No admin with that id.
+ */
+router.post('/admins/:id/resend-invite', protect, requireAdmin, idParamRule, validate, resendInvite);
 
 /**
  * @openapi
