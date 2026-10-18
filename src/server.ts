@@ -12,6 +12,6 @@ AppDataSource.initialize()
     });
   })
   .catch((err) => {
-    console.error('Could not connect to the database:', err);
+    console.error('[db] Could not connect to the database — the server is NOT running:', err);
     process.exit(1);
   });
