@@ -47,9 +47,13 @@ app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:3000' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-if (process.env.NODE_ENV !== 'production') {
-  app.use(morgan('dev'));
-}
+// Logs every request (method, path, status, response time). 'dev' is the
+// colorized, terse format meant for a local terminal; 'combined' (used in
+// production) is the standard Apache-style line most log viewers, including
+// Render's, parse and search well. Previously this was dev-only, so the
+// hosted server logged NO requests at all — nothing to check when diagnosing
+// a failure there.
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 // Raw spec JSON — useful for importing into Postman (Import -> Link) or

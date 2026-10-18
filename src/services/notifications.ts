@@ -1,4 +1,4 @@
-import { mailConfig, transporter } from '../config/mailer';
+import { mailConfig, resend, transporter } from '../config/mailer';
 import {
   AdminAccountEmailData,
   BookingEmailData,
@@ -23,14 +23,31 @@ interface Message {
 // Sending an email must NEVER break the request that triggered it: a visitor's
 // booking is already saved, so a mail-server hiccup is only logged.
 async function send(message: Message): Promise<void> {
-  if (!transporter) {
-    console.log(`[email] skipped (SMTP not configured): ${message.subject}`);
-    return;
-  }
+  const from = `${mailConfig.companyName} <${mailConfig.from}>`;
+
   try {
-    await transporter.sendMail({ from: `"${mailConfig.companyName}" <${mailConfig.from}>`, ...message });
+    if (resend) {
+      // Resend reports a rejected email by RETURNING an error rather than
+      // throwing, so it has to be checked explicitly — a try/catch alone
+      // would treat every rejection as a success.
+      const { data, error } = await resend.emails.send({ from, ...message });
+      if (error) {
+        console.error(`[email] resend rejected "${message.subject}" to ${message.to}:`, error.message);
+        return;
+      }
+      console.log(`[email] sent via resend: "${message.subject}" to ${message.to} (id ${data.id})`);
+      return;
+    }
+
+    if (transporter) {
+      await transporter.sendMail({ from, ...message });
+      console.log(`[email] sent via smtp: "${message.subject}" to ${message.to}`);
+      return;
+    }
+
+    console.log(`[email] skipped (no email provider configured): ${message.subject}`);
   } catch (error) {
-    console.error('[email] failed to send:', error instanceof Error ? error.message : error);
+    console.error(`[email] failed to send "${message.subject}" to ${message.to}:`, error instanceof Error ? error.message : error);
   }
 }
 

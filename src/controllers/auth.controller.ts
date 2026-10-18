@@ -28,20 +28,34 @@ function toPublicAdmin(admin: AdminUser) {
 }
 
 // POST /api/auth/login
+//
+// Every branch logs enough to diagnose a failure from server logs alone
+// (Render's dashboard, etc.) — but NEVER the password itself, in any form.
 const login = asyncHandler(async (req: Request, res: Response) => {
   const { email, password } = req.body;
+  console.log(`[login] attempt for "${email}"`);
 
   const admin = await adminRepo.findOneBy({ email });
   if (!admin) {
+    console.log(`[login] failed for "${email}": no account with that email`);
     throw new ApiError(401, 'Invalid email or password');
   }
 
   const isMatch = await bcrypt.compare(password, admin.password);
   if (!isMatch) {
+    console.log(`[login] failed for "${email}" (id ${admin.id}): wrong password`);
     throw new ApiError(401, 'Invalid email or password');
   }
 
+  // Thrown as an ApiError further down (inside generateToken) if JWT_SECRET
+  // isn't set on this host — surfaced as a 500, but that's an easy thing to
+  // miss on a host you don't control the env vars for as directly as .env.
+  if (!process.env.JWT_SECRET) {
+    console.error(`[login] JWT_SECRET is not set on this server — cannot issue a token for "${email}"`);
+  }
+
   const token = generateToken(admin.id);
+  console.log(`[login] succeeded for "${email}" (id ${admin.id}, role ${admin.role})`);
 
   res.json({
     success: true,

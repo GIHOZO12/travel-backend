@@ -36,9 +36,13 @@ function errorHandler(err: any, req: Request, res: Response, _next: NextFunction
     message = 'Record not found';
   }
 
-  if (process.env.NODE_ENV !== 'production') {
-    console.error(err);
-  }
+  // Always log server-side, including in production — this only ever reaches
+  // the server's own logs (Render's dashboard, etc.), never the HTTP response
+  // sent to the client (that's the sanitized `message` below). Silencing this
+  // in production, as the previous version did, meant every failure there was
+  // completely invisible — nothing to check when something goes wrong on the
+  // host.
+  console.error(`[error] ${req.method} ${req.originalUrl} -> ${statusCode}:`, err);
 
   res.status(statusCode).json({
     success: false,
