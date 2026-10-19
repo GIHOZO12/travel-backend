@@ -3,10 +3,7 @@ import { AppDataSource } from './config/data-source';
 import { AdminUser } from './entities/AdminUser';
 import { AdminRole } from './entities/enums';
 
-// Creates the FIRST admin account from .env. Run with `npm run seed`.
-// There is deliberately no public /register endpoint — every admin after
-// this one is created through the protected POST /api/auth/admins route,
-// which requires an already-logged-in admin.
+
 async function main(): Promise<void> {
   const name = process.env.SEED_ADMIN_NAME;
   const email = process.env.SEED_ADMIN_EMAIL;
