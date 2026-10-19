@@ -1,4 +1,4 @@
-import { mailConfig, resend, transporter } from '../config/mailer';
+import { mailConfig, relay, resend, transporter } from '../config/mailer';
 import {
   AdminAccountEmailData,
   BookingEmailData,
@@ -26,8 +26,61 @@ async function send(message: Message): Promise<void> {
   const from = `${mailConfig.companyName} <${mailConfig.from}>`;
 
   try {
+    if (relay) {
+      const started = Date.now();
+      console.log(`[email] relaying "${message.subject}" to ${message.to} via ${relay.url}`);
+
+      let res: Response;
+      try {
+        res = await fetch(relay.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${relay.secret}` },
+          body: JSON.stringify(message),
+          signal: AbortSignal.timeout(20_000),
+        });
+      } catch (error) {
+        // Never reached the frontend: wrong URL, DNS, Vercel down, or timeout.
+        const reason =
+          error instanceof Error && error.name === 'TimeoutError'
+            ? 'timed out after 20s'
+            : error instanceof Error
+              ? `${error.message}${error.cause ? ` (${String(error.cause)})` : ''}`
+              : String(error);
+        console.error(`[email] relay unreachable for "${message.subject}" to ${message.to}: ${reason} — check EMAIL_RELAY_URL`);
+        return;
+      }
+
+      // The relay answers with { id, ... }; that id matches its "[email <id>]" lines in Vercel's logs.
+      const text = await res.text().catch(() => '');
+      const json = (() => {
+        try {
+          return JSON.parse(text);
+        } catch {
+          return null;
+        }
+      })();
+      const ref = json?.id ? ` [vercel id ${json.id}]` : '';
+
+      if (!res.ok) {
+        const hint =
+          res.status === 401
+            ? ' — EMAIL_RELAY_SECRET differs between Render and Vercel'
+            : res.status === 503
+              ? ' — SMTP settings missing on Vercel (redeploy after adding them)'
+              : res.status === 404
+                ? ' — wrong EMAIL_RELAY_URL or the frontend is not deployed with /api/email'
+                : '';
+        console.error(
+          `[email] relay FAILED "${message.subject}" to ${message.to}: HTTP ${res.status} in ${Date.now() - started}ms${ref}${hint}`,
+          json ?? text.slice(0, 500),
+        );
+        return;
+      }
+      console.log(`[email] sent via relay: "${message.subject}" to ${message.to} in ${Date.now() - started}ms${ref}`);
+      return;
+    }
+
     if (resend) {
-  
       const { data, error } = await resend.emails.send({ from, ...message });
       if (error) {
         console.error(`[email] resend rejected "${message.subject}" to ${message.to}:`, error.message);
