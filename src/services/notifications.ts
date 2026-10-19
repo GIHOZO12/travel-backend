@@ -1,4 +1,4 @@
-import { mailConfig, resend, transporter } from '../config/mailer';
+import { mailConfig, relay, resend, transporter } from '../config/mailer';
 import {
   AdminAccountEmailData,
   BookingEmailData,
@@ -26,10 +26,61 @@ async function send(message: Message): Promise<void> {
   const from = `${mailConfig.companyName} <${mailConfig.from}>`;
 
   try {
+    if (relay) {
+      const started = Date.now();
+      console.log(`[email] relaying "${message.subject}" to ${message.to} via ${relay.url}`);
+
+      let res: Response;
+      try {
+        res = await fetch(relay.url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${relay.secret}` },
+          body: JSON.stringify(message),
+          signal: AbortSignal.timeout(20_000),
+        });
+      } catch (error) {
+        // Never reached the frontend: wrong URL, DNS, Vercel down, or timeout.
+        const reason =
+          error instanceof Error && error.name === 'TimeoutError'
+            ? 'timed out after 20s'
+            : error instanceof Error
+              ? `${error.message}${error.cause ? ` (${String(error.cause)})` : ''}`
+              : String(error);
+        console.error(`[email] relay unreachable for "${message.subject}" to ${message.to}: ${reason} — check EMAIL_RELAY_URL`);
+        return;
+      }
+
+      // The relay answers with { id, ... }; that id matches its "[email <id>]" lines in Vercel's logs.
+      const text = await res.text().catch(() => '');
+      const json = (() => {
+        try {
+          return JSON.parse(text);
+        } catch {
+          return null;
+        }
+      })();
+      const ref = json?.id ? ` [vercel id ${json.id}]` : '';
+
+      if (!res.ok) {
+        const hint =
+          res.status === 401
+            ? ' — EMAIL_RELAY_SECRET differs between Render and Vercel'
+            : res.status === 503
+              ? ' — SMTP settings missing on Vercel (redeploy after adding them)'
+              : res.status === 404
+                ? ' — wrong EMAIL_RELAY_URL or the frontend is not deployed with /api/email'
+                : '';
+        console.error(
+          `[email] relay FAILED "${message.subject}" to ${message.to}: HTTP ${res.status} in ${Date.now() - started}ms${ref}${hint}`,
+          json ?? text.slice(0, 500),
+        );
+        return;
+      }
+      console.log(`[email] sent via relay: "${message.subject}" to ${message.to} in ${Date.now() - started}ms${ref}`);
+      return;
+    }
+
     if (resend) {
-      // Resend reports a rejected email by RETURNING an error rather than
-      // throwing, so it has to be checked explicitly — a try/catch alone
-      // would treat every rejection as a success.
       const { data, error } = await resend.emails.send({ from, ...message });
       if (error) {
         console.error(`[email] resend rejected "${message.subject}" to ${message.to}:`, error.message);
@@ -71,19 +122,14 @@ export async function notifyBookingStatusChange(booking: BookingEmailData): Prom
   await send({ to: booking.email, ...customer });
 }
 
-// Sends the "set your password" invite link — on account creation, and again
-// whenever an admin clicks "Resend invite" for a still-pending account.
-// `rawToken` is the plaintext token (never stored — see inviteToken.ts); this
-// is the only place it exists outside of the moment it was generated.
+
 export async function notifyStaffInvite(admin: AdminAccountEmailData, rawToken: string): Promise<void> {
   const setPasswordUrl = `${process.env.CLIENT_URL || 'http://localhost:3000'}/admin/set-password?token=${rawToken}`;
   const message = staffInvite(mailConfig.companyName, admin, setPasswordUrl, INVITE_EXPIRY_HOURS);
   await send({ to: admin.email, ...message });
 }
 
-// Tells an existing account its role just changed (promoted/demoted). See
-// auth.controller.ts's updateAdmin — separate from notifyAdminAccountCreated,
-// which only fires once, when the account is first made.
+
 export async function notifyRoleChanged(admin: AdminAccountEmailData): Promise<void> {
   const loginUrl = `${process.env.CLIENT_URL || 'http://localhost:3000'}/admin/login`;
   const message = staffRoleChanged(mailConfig.companyName, admin, loginUrl);
