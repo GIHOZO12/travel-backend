@@ -14,6 +14,11 @@ import errorHandler from './middleware/errorHandler';
 
 const app = express();
 
+// Render (and most hosts) put a proxy in front of the app that sets
+// X-Forwarded-For. Trusting exactly one hop makes req.ip the real client IP,
+// which the rate limiter below needs. Override with TRUST_PROXY if the number
+// of proxies differs (0 = none, e.g. running without Docker locally).
+app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1));
 
 app.use(
   '/uploads',
